@@ -69,10 +69,8 @@ async def download_music(query: str):
 async def join_voice(guild_id: str, channel_id: str):
     """加入语音频道"""
     try:
-        from khl import HTTPRequester
-        req = HTTPRequester(TOKEN)
-        
-        result = await req.post("voice/join", {"channel_id": channel_id})
+        # 使用 bot.post 而不是 HTTPRequester
+        result = await bot.post("voice/join", {"channel_id": channel_id})
         logger.info(f"Join voice result: {result}")
         
         if result and result.get("ip"):
@@ -99,9 +97,7 @@ async def leave_voice(guild_id: str):
         
         channel_id = voice_channels.get(guild_id)
         if channel_id:
-            from khl import HTTPRequester
-            req = HTTPRequester(TOKEN)
-            await req.post("voice/leave", {"channel_id": channel_id})
+            await bot.post("voice/leave", {"channel_id": channel_id})
         
         voice_channels.pop(guild_id, None)
         voice_info.pop(guild_id, None)
