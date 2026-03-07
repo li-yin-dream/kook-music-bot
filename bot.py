@@ -7,7 +7,7 @@ import signal
 import httpx
 import json
 
-from khl import Bot, Message, PublicChannel
+from khl import Bot, Message
 
 # 日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -20,9 +20,9 @@ TOKEN = os.getenv("KOOK_BOT_TOKEN")
 bot = Bot(token=TOKEN)
 
 # 存储
-voice_channels = {}  # guild_id -> channel_id
-voice_info = {}      # guild_id -> {ip, port, ssrc}
-ffmpeg_processes = {}  # guild_id -> process
+voice_channels = {}
+voice_info = {}
+ffmpeg_processes = {}
 
 # ========== 音乐下载 ==========
 async def download_music(query: str):
@@ -31,7 +31,6 @@ async def download_music(query: str):
         api = "https://netease-cloud-music-api-gamma.vercel.app"
         
         async with httpx.AsyncClient() as client:
-            # 搜索
             r = await client.get(f"{api}/search?keywords={query}&limit=1", timeout=10)
             data = r.json()
             
@@ -42,7 +41,6 @@ async def download_music(query: str):
             song_id = song["id"]
             song_name = song["name"]
             
-            # 获取 URL
             r = await client.get(f"{api}/song/url?id={song_id}", timeout=10)
             data = r.json()
             
@@ -53,12 +51,10 @@ async def download_music(query: str):
             if not music_url:
                 return None, "无法播放（可能是VIP歌曲）"
             
-            # 下载
             r = await client.get(music_url, timeout=30)
             if len(r.content) < 10000:
                 return None, "文件太小"
             
-            # 保存
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
             tmp.write(r.content)
             tmp.close()
@@ -73,7 +69,6 @@ async def download_music(query: str):
 async def join_voice(guild_id: str, channel_id: str):
     """加入语音频道"""
     try:
-        # 使用 HTTP API 加入语音
         from khl import HTTPRequester
         req = HTTPRequester(TOKEN)
         
@@ -95,7 +90,6 @@ async def join_voice(guild_id: str, channel_id: str):
 async def leave_voice(guild_id: str):
     """离开语音频道"""
     try:
-        # 停止 FFmpeg
         if guild_id in ffmpeg_processes:
             try:
                 ffmpeg_processes[guild_id].terminate()
@@ -103,14 +97,12 @@ async def leave_voice(guild_id: str):
             except:
                 pass
         
-        # 调用 API 离开
         channel_id = voice_channels.get(guild_id)
         if channel_id:
             from khl import HTTPRequester
             req = HTTPRequester(TOKEN)
             await req.post("voice/leave", {"channel_id": channel_id})
         
-        # 清理
         voice_channels.pop(guild_id, None)
         voice_info.pop(guild_id, None)
         return True
@@ -120,7 +112,7 @@ async def leave_voice(guild_id: str):
         return False
 
 async def play_music(guild_id: str, audio_file: str):
-    """播放音乐（FFmpeg 推流）"""
+    """播放音乐"""
     try:
         info = voice_info.get(guild_id)
         if not info:
@@ -130,7 +122,6 @@ async def play_music(guild_id: str, audio_file: str):
         port = info.get("port")
         ssrc = info.get("ssrc", 0)
         
-        # FFmpeg 命令
         cmd = [
             "ffmpeg", "-re", "-i", audio_file,
             "-ar", "48000", "-ac", "2",
@@ -139,7 +130,6 @@ async def play_music(guild_id: str, audio_file: str):
             f"rtp://{ip}:{port}?ssrc={ssrc}"
         ]
         
-        # 启动 FFmpeg
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=subprocess.DEVNULL,
@@ -147,11 +137,8 @@ async def play_music(guild_id: str, audio_file: str):
         )
         
         ffmpeg_processes[guild_id] = process
-        
-        # 等待播放结束
         await process.communicate()
         
-        # 清理
         if guild_id in ffmpeg_processes:
             del ffmpeg_processes[guild_id]
         
@@ -161,43 +148,25 @@ async def play_music(guild_id: str, audio_file: str):
         logger.error(f"Play error: {e}")
         return False, str(e)
 
-async def keep_alive_task(guild_id: str):
-    """保活"""
-    channel_id = voice_channels.get(guild_id)
-    while channel_id and guild_id in voice_channels:
-        try:
-            from khl import HTTPRequester
-            req = HTTPRequester(TOKEN)
-            await req.post("voice/keep-alive", {"channel_id": channel_id})
-            await asyncio.sleep(25)
-        except Exception as e:
-            logger.error(f"Keep alive error: {e}")
-            break
-
 # ========== 命令 ==========
 
 @bot.command(name="hi")
 async def cmd_hi(msg: Message):
-    """测试"""
     await msg.reply("🎵 你好！音乐机器人已就绪")
 
 @bot.command(name="join")
 async def cmd_join(msg: Message, channel_id: str):
-    """加入语音频道"""
     await msg.reply(f"🎤 正在加入频道 {channel_id}...")
     
     success, result = await join_voice(msg.guild_id, channel_id)
     
     if success:
         await msg.reply(f"✅ 已加入！\nIP: {result.get('ip')}:{result.get('port')}")
-        # 启动保活
-        asyncio.create_task(keep_alive_task(msg.guild_id))
     else:
         await msg.reply(f"❌ 加入失败: {result}")
 
 @bot.command(name="leave")
 async def cmd_leave(msg: Message):
-    """离开语音频道"""
     if msg.guild_id not in voice_channels:
         await msg.reply("⚠️ 当前不在语音频道")
         return
@@ -207,7 +176,6 @@ async def cmd_leave(msg: Message):
 
 @bot.command(name="play")
 async def cmd_play(msg: Message, *, query: str):
-    """播放音乐"""
     if msg.guild_id not in voice_channels:
         await msg.reply("⚠️ 请先使用 !join 加入语音频道")
         return
@@ -221,13 +189,10 @@ async def cmd_play(msg: Message, *, query: str):
         return
     
     await msg.reply(f"▶️ 开始播放: {song_name}")
-    
-    # 异步播放
     asyncio.create_task(play_music(msg.guild_id, file_path))
 
 @bot.command(name="stop")
 async def cmd_stop(msg: Message):
-    """停止播放"""
     if msg.guild_id in ffmpeg_processes:
         ffmpeg_processes[msg.guild_id].terminate()
         await msg.reply("⏹️ 已停止")
@@ -236,7 +201,6 @@ async def cmd_stop(msg: Message):
 
 @bot.command(name="help")
 async def cmd_help(msg: Message):
-    """帮助"""
     help_text = """**命令列表**
 !hi - 测试
 !join <频道ID> - 加入语音频道
@@ -246,7 +210,5 @@ async def cmd_help(msg: Message):
     await msg.reply(help_text)
 
 # ========== 启动 ==========
-
-@bot.on_startup
-async def on_start(bot):
-    logger.info("🚀 Bot 启动成功！")
+if __name__ == "__main__":
+    bot.run()
