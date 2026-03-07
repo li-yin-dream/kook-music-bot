@@ -69,15 +69,23 @@ async def download_music(query: str):
 async def join_voice(guild_id: str, channel_id: str):
     """加入语音频道"""
     try:
-        result = await bot.post("voice/join", {"channel_id": channel_id})
-        logger.info(f"Join voice result: {result}")
+        # 使用 httpx 直接调用 API
+        async with httpx.AsyncClient() as client:
+            r = await client.post(
+                "https://www.kookapp.cn/api/v3/voice/join",
+                headers={"Authorization": f"Bot {TOKEN}"},
+                json={"channel_id": channel_id},
+                timeout=10.0
+            )
+            result = r.json()
+            logger.info(f"Join voice result: {result}")
         
-        if result and result.get("ip"):
+        if result.get("code") == 0 and result.get("data", {}).get("ip"):
             voice_channels[guild_id] = channel_id
-            voice_info[guild_id] = result
-            return True, result
+            voice_info[guild_id] = result["data"]
+            return True, result["data"]
         else:
-            error = result.get("message", "未知错误") if result else "无响应"
+            error = result.get("message", "未知错误")
             return False, error
             
     except Exception as e:
@@ -96,7 +104,13 @@ async def leave_voice(guild_id: str):
         
         channel_id = voice_channels.get(guild_id)
         if channel_id:
-            await bot.post("voice/leave", {"channel_id": channel_id})
+            async with httpx.AsyncClient() as client:
+                await client.post(
+                    "https://www.kookapp.cn/api/v3/voice/leave",
+                    headers={"Authorization": f"Bot {TOKEN}"},
+                    json={"channel_id": channel_id},
+                    timeout=10.0
+                )
         
         voice_channels.pop(guild_id, None)
         voice_info.pop(guild_id, None)
