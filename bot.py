@@ -190,7 +190,8 @@ async def cmd_leave(msg: Message):
     await msg.reply("👋 已离开语音频道")
 
 @bot.command(name="play")
-async def cmd_play(msg: Message, *, query: str):
+async def cmd_play(msg: Message, query: str):
+    """播放音乐"""
     guild_id = msg.ctx.guild.id if msg.ctx.guild else None
     if not guild_id or guild_id not in voice_channels:
         await msg.reply("⚠️ 请先使用 /join 加入语音频道")
