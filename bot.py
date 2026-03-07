@@ -248,8 +248,5 @@ async def cmd_help(msg: Message):
 # ========== 启动 ==========
 
 @bot.on_startup
-async def on_start():
+async def on_start(bot):
     logger.info("🚀 Bot 启动成功！")
-
-if __name__ == "__main__":
-    bot.run()
