@@ -17,7 +17,7 @@ logger = logging.getLogger("kook-bot")
 TOKEN = os.getenv("KOOK_BOT_TOKEN")
 
 # 创建 Bot
-bot = Bot(token=TOKEN, cmd_prefix=["!", "/"])
+bot = Bot(token=TOKEN)
 
 # 存储
 voice_channels = {}
