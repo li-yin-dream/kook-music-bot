@@ -126,23 +126,28 @@ async def play_music(guild_id: str, audio_file: str):
         info = voice_info.get(guild_id)
         if not info:
             logger.error("没有语音连接信息")
-            return False, "没有语音连接信息"
+            return
         
         ip = info.get("ip")
         port = info.get("port")
-        ssrc = info.get("audio_ssrc", 0)  # 注意：可能是 audio_ssrc
+        ssrc = info.get("audio_ssrc", 0)
         
-        logger.info(f"推流地址: {ip}:{port}, ssrc={ssrc}")
+        logger.info(f"推流: {ip}:{port}, ssrc={ssrc}")
         
+        # 使用 UDP 推流
         cmd = [
-            "ffmpeg", "-re", "-i", audio_file,
-            "-ar", "48000", "-ac", "2",
-            "-c:a", "libopus", "-b:a", "128k",
+            "ffmpeg", 
+            "-re",
+            "-i", audio_file,
+            "-ar", "48000",
+            "-ac", "2",
+            "-c:a", "libopus",
+            "-b:a", "128k",
             "-f", "rtp",
             f"rtp://{ip}:{port}?ssrc={ssrc}"
         ]
         
-        logger.info(f"FFmpeg 命令: {' '.join(cmd)}")
+        logger.info(f"FFmpeg: {' '.join(cmd)}")
         
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -151,25 +156,25 @@ async def play_music(guild_id: str, audio_file: str):
         )
         
         ffmpeg_processes[guild_id] = process
+        logger.info(f"FFmpeg PID: {process.pid}")
         
-        # 等待一段时间看是否有错误
-        await asyncio.sleep(2)
+        # 读取错误输出
+        stderr_lines = []
+        while True:
+            line = await process.stderr.readline()
+            if not line:
+                break
+            line_str = line.decode('utf-8', errors='ignore').strip()
+            stderr_lines.append(line_str)
+            logger.info(f"FFmpeg: {line_str}")
+            if len(stderr_lines) > 100:  # 限制行数
+                break
         
-        # 检查进程是否还在运行
-        if process.returncode is not None:
-            stderr = await process.stderr.read()
-            logger.error(f"FFmpeg 启动失败: {stderr.decode()}")
-            return False, "FFmpeg 启动失败"
+        await process.wait()
+        logger.info(f"FFmpeg 退出码: {process.returncode}")
         
-        # 继续等待播放完成
-        stdout, stderr = await process.communicate()
-        
-        if process.returncode != 0:
-            stderr_str = stderr.decode('utf-8', errors='ignore') if stderr else ""
-            logger.error(f"FFmpeg 错误: {stderr_str[:500]}")
-            return False, f"播放错误: {stderr_str[:200]}"
-        
-        return True, "播放完成"
+        if guild_id in ffmpeg_processes:
+            del ffmpeg_processes[guild_id]
         
     except Exception as e:
         logger.error(f"Play error: {e}")
@@ -226,6 +231,12 @@ async def cmd_play(msg: Message, query: str):
         return
     
     await msg.reply(f"▶️ 开始播放: {song_name}")
+    
+    # 启动保活任务
+    channel_id = voice_channels[guild_id]
+    asyncio.create_task(keep_alive_task(guild_id, channel_id))
+    
+    # 播放
     asyncio.create_task(play_music(guild_id, file_path))
 
 @bot.command(name="stop")
