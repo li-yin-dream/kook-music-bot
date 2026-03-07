@@ -158,7 +158,13 @@ async def cmd_hi(msg: Message):
 async def cmd_join(msg: Message, channel_id: str):
     await msg.reply(f"🎤 正在加入频道 {channel_id}...")
     
-    success, result = await join_voice(msg.guild_id, channel_id)
+    # 修复：使用 msg.ctx.guild.id
+    guild_id = msg.ctx.guild.id if msg.ctx.guild else None
+    if not guild_id:
+        await msg.reply("❌ 无法获取服务器ID")
+        return
+    
+    success, result = await join_voice(guild_id, channel_id)
     
     if success:
         await msg.reply(f"✅ 已加入！\nIP: {result.get('ip')}:{result.get('port')}")
@@ -167,16 +173,18 @@ async def cmd_join(msg: Message, channel_id: str):
 
 @bot.command(name="leave")
 async def cmd_leave(msg: Message):
-    if msg.guild_id not in voice_channels:
+    guild_id = msg.ctx.guild.id if msg.ctx.guild else None
+    if not guild_id or guild_id not in voice_channels:
         await msg.reply("⚠️ 当前不在语音频道")
         return
     
-    await leave_voice(msg.guild_id)
+    await leave_voice(guild_id)
     await msg.reply("👋 已离开语音频道")
 
 @bot.command(name="play")
 async def cmd_play(msg: Message, *, query: str):
-    if msg.guild_id not in voice_channels:
+    guild_id = msg.ctx.guild.id if msg.ctx.guild else None
+    if not guild_id or guild_id not in voice_channels:
         await msg.reply("⚠️ 请先使用 !join 加入语音频道")
         return
     
@@ -189,12 +197,17 @@ async def cmd_play(msg: Message, *, query: str):
         return
     
     await msg.reply(f"▶️ 开始播放: {song_name}")
-    asyncio.create_task(play_music(msg.guild_id, file_path))
+    asyncio.create_task(play_music(guild_id, file_path))
 
 @bot.command(name="stop")
 async def cmd_stop(msg: Message):
-    if msg.guild_id in ffmpeg_processes:
-        ffmpeg_processes[msg.guild_id].terminate()
+    guild_id = msg.ctx.guild.id if msg.ctx.guild else None
+    if not guild_id:
+        await msg.reply("⚠️ 无法获取服务器ID")
+        return
+        
+    if guild_id in ffmpeg_processes:
+        ffmpeg_processes[guild_id].terminate()
         await msg.reply("⏹️ 已停止")
     else:
         await msg.reply("⚠️ 当前没有播放")
