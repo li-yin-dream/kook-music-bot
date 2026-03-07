@@ -125,11 +125,14 @@ async def play_music(guild_id: str, audio_file: str):
     try:
         info = voice_info.get(guild_id)
         if not info:
+            logger.error("没有语音连接信息")
             return False, "没有语音连接信息"
         
         ip = info.get("ip")
         port = info.get("port")
-        ssrc = info.get("ssrc", 0)
+        ssrc = info.get("audio_ssrc", 0)  # 注意：可能是 audio_ssrc
+        
+        logger.info(f"推流地址: {ip}:{port}, ssrc={ssrc}")
         
         cmd = [
             "ffmpeg", "-re", "-i", audio_file,
@@ -139,22 +142,39 @@ async def play_music(guild_id: str, audio_file: str):
             f"rtp://{ip}:{port}?ssrc={ssrc}"
         ]
         
+        logger.info(f"FFmpeg 命令: {' '.join(cmd)}")
+        
         process = await asyncio.create_subprocess_exec(
             *cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
         )
         
         ffmpeg_processes[guild_id] = process
-        await process.communicate()
         
-        if guild_id in ffmpeg_processes:
-            del ffmpeg_processes[guild_id]
+        # 等待一段时间看是否有错误
+        await asyncio.sleep(2)
+        
+        # 检查进程是否还在运行
+        if process.returncode is not None:
+            stderr = await process.stderr.read()
+            logger.error(f"FFmpeg 启动失败: {stderr.decode()}")
+            return False, "FFmpeg 启动失败"
+        
+        # 继续等待播放完成
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode != 0:
+            stderr_str = stderr.decode('utf-8', errors='ignore') if stderr else ""
+            logger.error(f"FFmpeg 错误: {stderr_str[:500]}")
+            return False, f"播放错误: {stderr_str[:200]}"
         
         return True, "播放完成"
         
     except Exception as e:
         logger.error(f"Play error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return False, str(e)
 
 # ========== 命令（带 / 前缀）==========
