@@ -145,11 +145,11 @@ async def play_music(guild_id: str, audio_file: str):
 
 # ========== 命令（带 / 前缀）==========
 
-@bot.command(name="/hi")
+@bot.command(name="hi")
 async def cmd_hi(msg: Message):
     await msg.reply("🎵 你好！音乐机器人已就绪")
 
-@bot.command(name="/join")
+@bot.command(name="join")
 async def cmd_join(msg: Message, channel_id: str):
     await msg.reply(f"🎤 正在加入频道 {channel_id}...")
     
@@ -165,7 +165,7 @@ async def cmd_join(msg: Message, channel_id: str):
     else:
         await msg.reply(f"❌ 加入失败: {result}")
 
-@bot.command(name="/leave")
+@bot.command(name="leave")
 async def cmd_leave(msg: Message):
     guild_id = msg.ctx.guild.id if msg.ctx.guild else None
     if not guild_id or guild_id not in voice_channels:
@@ -175,7 +175,7 @@ async def cmd_leave(msg: Message):
     await leave_voice(guild_id)
     await msg.reply("👋 已离开语音频道")
 
-@bot.command(name="/play")
+@bot.command(name="play")
 async def cmd_play(msg: Message, *, query: str):
     guild_id = msg.ctx.guild.id if msg.ctx.guild else None
     if not guild_id or guild_id not in voice_channels:
@@ -193,7 +193,7 @@ async def cmd_play(msg: Message, *, query: str):
     await msg.reply(f"▶️ 开始播放: {song_name}")
     asyncio.create_task(play_music(guild_id, file_path))
 
-@bot.command(name="/stop")
+@bot.command(name="stop")
 async def cmd_stop(msg: Message):
     guild_id = msg.ctx.guild.id if msg.ctx.guild else None
     if not guild_id:
@@ -206,7 +206,7 @@ async def cmd_stop(msg: Message):
     else:
         await msg.reply("⚠️ 当前没有播放")
 
-@bot.command(name="/help")
+@bot.command(name="help")
 async def cmd_help(msg: Message):
     help_text = """**命令列表**
 /hi - 测试
