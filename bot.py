@@ -158,14 +158,18 @@ async def play_music(guild_id: str, audio_file: str):
         
         logger.info(f"推流: {ip}:{port}, ssrc={ssrc}")
         
+        # 修改 FFmpeg 参数，使用更兼容的设置
         cmd = [
             "ffmpeg", 
             "-re",
             "-i", audio_file,
-            "-ar", "48000",
-            "-ac", "2",
-            "-c:a", "libopus",
-            "-b:a", "128k",
+            "-ar", "48000",      # 采样率 48kHz
+            "-ac", "2",          # 双声道
+            "-c:a", "libopus",   # Opus 编码
+            "-b:a", "128k",      # 比特率 128k
+            "-vbr", "on",        # 可变比特率
+            "-frame_duration", "20",  # 20ms 帧
+            "-application", "audio",  # 音频模式
             "-f", "rtp",
             f"rtp://{ip}:{port}?ssrc={ssrc}"
         ]
