@@ -66,10 +66,34 @@ async def download_music(query: str):
         return None, str(e)
 
 # ========== 语音功能 ==========
+async def keep_alive_task(guild_id: str, channel_id: str):
+    """保活任务"""
+    try:
+        while True:
+            await asyncio.sleep(25)
+            if guild_id not in voice_channels or voice_channels[guild_id] != channel_id:
+                logger.info("频道已变更，停止保活")
+                break
+            try:
+                async with httpx.AsyncClient() as client:
+                    await client.post(
+                        "https://www.kookapp.cn/api/v3/voice/keep-alive",
+                        headers={"Authorization": f"Bot {TOKEN}"},
+                        json={"channel_id": channel_id},
+                        timeout=10.0
+                    )
+                logger.debug(f"保活成功: {channel_id}")
+            except Exception as e:
+                logger.error(f"保活失败: {e}")
+                break
+    except asyncio.CancelledError:
+        logger.info("保活任务被取消")
+    except Exception as e:
+        logger.error(f"保活错误: {e}")
+
 async def join_voice(guild_id: str, channel_id: str):
     """加入语音频道"""
     try:
-        # 使用 httpx 直接调用 API
         async with httpx.AsyncClient() as client:
             r = await client.post(
                 "https://www.kookapp.cn/api/v3/voice/join",
@@ -134,7 +158,6 @@ async def play_music(guild_id: str, audio_file: str):
         
         logger.info(f"推流: {ip}:{port}, ssrc={ssrc}")
         
-        # 使用 UDP 推流
         cmd = [
             "ffmpeg", 
             "-re",
@@ -167,7 +190,7 @@ async def play_music(guild_id: str, audio_file: str):
             line_str = line.decode('utf-8', errors='ignore').strip()
             stderr_lines.append(line_str)
             logger.info(f"FFmpeg: {line_str}")
-            if len(stderr_lines) > 100:  # 限制行数
+            if len(stderr_lines) > 100:
                 break
         
         await process.wait()
@@ -180,9 +203,8 @@ async def play_music(guild_id: str, audio_file: str):
         logger.error(f"Play error: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        return False, str(e)
 
-# ========== 命令（带 / 前缀）==========
+# ========== 命令 ==========
 
 @bot.command(name="hi")
 async def cmd_hi(msg: Message):
@@ -216,7 +238,6 @@ async def cmd_leave(msg: Message):
 
 @bot.command(name="play")
 async def cmd_play(msg: Message, query: str):
-    """播放音乐"""
     guild_id = msg.ctx.guild.id if msg.ctx.guild else None
     if not guild_id or guild_id not in voice_channels:
         await msg.reply("⚠️ 请先使用 /join 加入语音频道")
@@ -232,7 +253,7 @@ async def cmd_play(msg: Message, query: str):
     
     await msg.reply(f"▶️ 开始播放: {song_name}")
     
-    # 启动保活任务
+    # 启动保活
     channel_id = voice_channels[guild_id]
     asyncio.create_task(keep_alive_task(guild_id, channel_id))
     
